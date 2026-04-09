@@ -182,7 +182,7 @@ def dfs(request):
             steps.append({
                 'visited': visited[:],
                 'current': node,
-                'stack': [],  # DFS использует стек (рекурсия)
+                'stack': [],
                 'graph': graph
             })
             
@@ -207,7 +207,6 @@ def heap_sort(request):
             l = 2 * i + 1
             r = 2 * i + 2
             
-            # Добавляем шаг ДО сравнений
             steps.append({
                 'array': arr.copy(),
                 'n': n, 'i': i, 'largest': largest,
@@ -228,7 +227,7 @@ def heap_sort(request):
                 steps[-1]['swap'] = True
                 heapify(n, largest)
         
-        # Фаза 1: Строим Max Heap
+        # Строим Max Heap
         n = len(arr)
         for i in range(n//2 - 1, -1, -1):
             steps.append({
@@ -238,7 +237,7 @@ def heap_sort(request):
             })
             heapify(n, i)
         
-        # Фаза 2: Извлекаем максимумы
+        # Извлекаем максимумы
         for i in range(n-1, 0, -1):
             steps.append({
                 'array': arr.copy(),

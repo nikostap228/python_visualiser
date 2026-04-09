@@ -60,7 +60,7 @@ def quicksort(arr, low, high):
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken  // Добавляем CSRF токен в заголовки
+                    'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({numbers: nums})
             });
