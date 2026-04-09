@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Python Алгоритмы • Визуализатор</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'index.css' %}">
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Алгоритмы в действии</h1>
+        <p class="subtitle">Визуализация шагов сортировок и обхода графов • Интерактивно • Пошагово</p>
+        
+        <div class="algorithms">
+            {% for algo in algorithms %}
+            <div class="card">
+                <h3><a href="/{{ algo.url }}/">{{ algo.name }}</a></h3>
+                {% if algo.type == 'Сортировка' %}
+                    <span class="type sorts">{{ algo.type }}</span>
+                {% else %}
+                    <span class="type graphs">{{ algo.type }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

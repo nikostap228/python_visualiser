@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>🫧 Пузырьковая сортировка</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>function getCookie(name){let cookieValue=null;if(document.cookie&&document.cookie!==""){const cookies=document.cookie.split(';');for(let i=0;i<cookies.length;i++){const cookie=cookies[i].trim();if(cookie.substring(0,name.length+1)===(name+'=')){cookieValue=decodeURIComponent(cookie.substring(name.length+1));break;}}}return cookieValue;}</script>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+    <h1>🫧 Пузырьковая сортировка (Bubble Sort)</h1>
+    <div id="controls">
+        <label>Числа (через запятую):</label><br>
+        <input type="text" id="input" value="64,34,25,12,22,11,90,5,77,42">
+        <button onclick="startSort()">▶️ Запустить</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Шаг назад</button>
+        <button onclick="nextStep()">➡️ Шаг</button>
+        <div id="status">Готов к запуску</div>
+    </div>
+    <canvas id="canvas" width="900" height="450"></canvas>
+    <div id="info">Шаг: <span id="step">0</span>/<span id="total">0</span></div>
+    <pre id="code">def bubble_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        for j in range(n-i-1):
+            if arr[j] > arr[j+1]:
+                arr[j], arr[j+1] = arr[j+1], arr[j]  # SWAP!
+    return arr</pre>
+
+    <script>
+        let steps = [], currentStep = 0;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        async function startSort() {
+            const nums = $('#input').val().split(',').map(n=>parseInt(n.trim())).filter(n=>!isNaN(n));
+            if (nums.length < 2) return alert('Минимум 2 числа!');
+            $('#status').text('Запуск...');
+            
+            $.ajax({
+                url: '/bubble_sort/',
+                type: 'POST',
+                data: JSON.stringify({numbers: nums}),
+                contentType: 'application/json',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(data) {
+                    steps = data.steps;
+                    currentStep = 0;
+                    $('#total').text(steps.length);
+                    $('#status').text('Готово! ' + steps.length + ' шагов');
+                    nextStep();
+                },
+                error: function(xhr, status, error) {
+                    $('#status').text('Ошибка ' + xhr.status + ': ' + error);
+                    console.error('AJAX Error:', xhr.responseText);
+                }
+            });
+        }
+        
+        function nextStep() {
+            if (currentStep >= steps.length) return;
+            const step = steps[currentStep];
+            drawArray(step.array, step);
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            currentStep++;
+        }
+        
+        function prevStep() {
+            if (currentStep <= 0) return;
+            currentStep--;
+            const step = steps[currentStep];
+            drawArray(step.array, step);
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+        }
+        
+        function drawArray(arr, info) {
+            ctx.clearRect(0,0,900,450);
+            const max = Math.max(...arr);
+            const w = 900 / arr.length;
+            for(let i=0; i<arr.length; i++){
+                let color = `hsl(${arr[i]/max*360},70%,50%)`;
+                if(i===info.j || i===info.j+1) color = info.swap ? '#ff4444' : '#ffaa00';
+                ctx.fillStyle = color;
+                ctx.fillRect(i*w,450-(arr[i]/max*400),w-2,arr[i]/max*400);
+                ctx.fillStyle = '#000'; ctx.font='12px Arial'; ctx.textAlign='center';
+                ctx.fillText(arr[i], i*w + w/2, 440);
+            }
+        }
+        
+        $(document).keydown(function(e){
+            if(e.key==='ArrowRight') nextStep();
+            if(e.key==='ArrowLeft') prevStep();
+        });
+    </script>
+</body>
+</html>

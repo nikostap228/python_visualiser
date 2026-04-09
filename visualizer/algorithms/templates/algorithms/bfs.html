@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>🔍 BFS</title>
+    <meta name="csrf-token" content="{% csrf_token %}">
+    
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+    <h1>🔍 Поиск в ширину (BFS)</h1>
+    
+    <div id="controls">
+        <label>Граф (JSON adjacency list):</label><br>
+        <textarea id="graphInput">[[1,2],[0,3],[0,4],[1],[2]]</textarea><br>
+        <label>Стартовая вершина:</label>
+        <input type="number" id="start" value="0" min="0" max="4" style="width:60px;"><br>
+        <button onclick="startBFS()">▶️ Запустить BFS</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="nextStep()">➡️ Шаг</button>
+    </div>
+    
+    <canvas id="canvas" width="900" height="500"></canvas>
+    
+    <div id="info">
+        Шаг: <span id="step">0</span> / <span id="total">0</span> | 
+        <span id="queueInfo"></span>
+    </div>
+    
+    <div id="legend">
+        <span class="legend" style="background:lightblue;"></span>Не посещены | 
+        <span class="legend" style="background:orange;"></span>В очереди | 
+        <span class="legend" style="background:green;"></span>Посещены | 
+        <span class="legend" style="background:red;"></span>Текущий
+    </div>
+    
+    <pre id="code">from collections import deque
+
+def bfs(graph, start):
+    visited = [False] * len(graph)
+    queue = deque([start])
+    visited[start] = True  # Маркируем старт
+    
+    while queue:            # ← Пока очередь не пуста
+        node = queue.popleft()  # Извлекаем узел
+        # process(node)      # Обрабатываем
+        
+        for neighbor in graph[node]:
+            if not visited[neighbor]:
+                queue.append(neighbor)
+                visited[neighbor] = True  # Маркируем при добавлении
+    return visited</pre>
+
+    <script>
+        let steps = []; 
+        let currentStep = 0; 
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const nodeRadius = 30;
+        const nodes = [{x:200,y:150}, {x:400,y:80}, {x:400,y:220}, {x:600,y:50}, {x:600,y:250}];
+
+        // Получение CSRF токена
+        function getCsrfToken() {
+            const token = document.querySelector('meta[name="csrf-token"]');
+            return token ? token.getAttribute('content') : '';
+        }
+        
+        async function startBFS() {
+            const graphInput = document.getElementById('graphInput').value;
+            const start = parseInt(document.getElementById('start').value);
+            let graph;
+            
+            try {
+                graph = JSON.parse(graphInput);
+            } catch(e) { 
+                alert('Неверный JSON!'); 
+                return; 
+            }
+            
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                alert('CSRF токен не найден!');
+                return;
+            }
+            
+            const res = await fetch('/bfs/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken  // ✅ Правильный заголовок
+                },
+                body: JSON.stringify({graph: graph, start: start})
+            });
+            
+            if (!res.ok) {
+                const errorText = await res.text();
+                alert('Ошибка сервера: ' + res.status + ' ' + res.statusText + '\n' + errorText);
+                return;
+            }
+            
+            const data = await res.json();
+            steps = data.steps;
+            currentStep = 0;
+            document.getElementById('total').textContent = steps.length;
+            document.getElementById('prevBtn').disabled = true;
+            nextStep();
+        }
+        
+        function nextStep() {
+            if (currentStep >= steps.length) return;
+            const step = steps[currentStep];
+            drawGraph(step);
+            updateInfo(step);
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+            currentStep++;
+        }
+        
+        function prevStep() {
+            if (currentStep <= 0) return;
+            currentStep--;
+            const step = steps[currentStep];
+            drawGraph(step);
+            updateInfo(step);
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+        }
+        
+        function drawGraph(step) {
+            ctx.clearRect(0, 0, 900, 500);
+            
+            // Рёбра
+            ctx.strokeStyle = '#ccc'; 
+            ctx.lineWidth = 3;
+            for (let u = 0; u < step.graph.length; u++) {
+                for (let v of step.graph[u]) {
+                    ctx.beginPath();
+                    ctx.moveTo(nodes[u].x, nodes[u].y);
+                    ctx.lineTo(nodes[v].x, nodes[v].y);
+                    ctx.stroke();
+                }
+            }
+            
+            // Узлы
+            for (let i = 0; i < nodes.length; i++) {
+                let color = step.visited[i] ? '#4CAF50' : 
+                           step.queue.includes(i) ? '#FF9800' : '#2196F3';
+                if (i === step.current) color = '#F44336';
+                
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(nodes[i].x, nodes[i].y, nodeRadius, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.strokeStyle = '#fff'; 
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i, nodes[i].x, nodes[i].y);
+            }
+        }
+        
+        function updateInfo(step) {
+            document.getElementById('queueInfo').textContent = 
+                `Очередь: [${step.queue.join(', ')}]`;
+        }
+        
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight') nextStep();
+            if (e.key === 'ArrowLeft') prevStep();
+        });
+    </script>
+</body>
+</html>

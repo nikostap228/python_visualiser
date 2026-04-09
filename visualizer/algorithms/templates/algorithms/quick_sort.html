@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Быстрая сортировка • Python визуализатор</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+<body>
+    <h1>⚡ Быстрая сортировка (Quicksort)</h1>
+   
+    <div id="controls">
+        <label>Введите числа (через запятую):</label><br>
+        <input type="text" id="input" value="64,34,25,12,22,11,90,5,77,42">
+        <button onclick="startSort()">▶️ Запустить Quicksort</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="nextStep()">➡️ Шаг</button>
+    </div>
+   
+    <canvas id="canvas" width="900" height="450"></canvas>
+   
+    <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
+   
+    <pre id="code">def partition(arr, low, high):
+    pivot = arr[high]
+    i = low - 1
+    for j in range(low, high):
+        if arr[j] < pivot:      # ← Сравнение с pivot
+            i += 1
+            arr[i], arr[j] = arr[j], arr[i]
+    arr[i + 1], arr[high] = arr[high], arr[i + 1]
+    return i + 1
+
+def quicksort(arr, low, high):
+    if low < high:
+        pi = partition(arr, low, high)
+        quicksort(arr, low, pi - 1)
+        quicksort(arr, pi + 1, high)</pre>
+
+    <!-- CSRF токен мета-тег -->
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <script>
+        let steps = []; 
+        let currentStep = 0;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Получаем CSRF токен
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+     
+        async function startSort() {
+            const nums = document.getElementById('input').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            if (nums.length < 2) return alert('Введите минимум 2 числа!');
+            
+            const csrfToken = getCsrfToken();
+            
+            const res = await fetch('/quick_sort/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken  // Добавляем CSRF токен в заголовки
+                },
+                body: JSON.stringify({numbers: nums})
+            });
+            
+            if (!res.ok) {
+                return alert('Ошибка: ' + res.statusText);
+            }
+            
+            const data = await res.json();
+            steps = data.steps;
+            currentStep = 0;
+            document.getElementById('total').textContent = steps.length;
+            document.getElementById('prevBtn').disabled = true;
+            nextStep();
+        }
+     
+        function nextStep() {
+            if (currentStep >= steps.length) return;
+            const step = steps[currentStep];
+            drawArray(step.array, step);
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+            currentStep++;
+        }
+     
+        function prevStep() {
+            if (currentStep <= 0) return;
+            currentStep--;
+            const step = steps[currentStep];
+            drawArray(step.array, step);
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+        }
+     
+        function drawArray(arr, info) {
+            ctx.clearRect(0, 0, 900, 450);
+            const max = Math.max(...arr);
+            const w = 900 / arr.length;
+            for (let i = 0; i < arr.length; i++) {
+                let color = `hsl(${arr[i] / max * 360}, 70%, 50%)`;
+                if (i === info.j || i === info.pivot_idx || i === info.high) color = '#ff4444';
+                else if (i === info.i) color = '#ffaa00';
+                ctx.fillStyle = color;
+                ctx.fillRect(i * w, 450 - (arr[i] / max * 400), w - 2, arr[i] / max * 400);
+                ctx.fillStyle = '#000';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(arr[i], i * w + w / 2, 440);
+            }
+        }
+     
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight') nextStep();
+            if (e.key === 'ArrowLeft') prevStep();
+        });
+    </script>
+</body>
+</html>

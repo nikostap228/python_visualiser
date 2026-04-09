@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Сортировка слиянием • Python визуализатор</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+    <h1>🔗 Сортировка слиянием (Merge Sort)</h1>
+   
+    <div id="controls">
+        <label>Введите числа (через запятую):</label><br>
+        <input type="text" id="input" value="64,34,25,12,22,11,90,5">
+        <button onclick="startSort()">▶️ Запустить Merge Sort</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="nextStep()">➡️ Шаг</button>
+    </div>
+   
+    <canvas id="canvas" width="900" height="450"></canvas>
+   
+    <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
+   
+    <pre id="code">def merge(left, right):
+    result = []
+    i = j = 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:  # ← Берем меньший
+            result.append(left[i])
+            i += 1
+        else:
+            result.append(right[j])
+            j += 1
+    return result + left[i:] + right[j:]
+
+def mergesort(arr):
+    if len(arr) <= 1: return arr
+    mid = len(arr) // 2
+    return merge(mergesort(arr[:mid]), mergesort(arr[mid:]))</pre>
+
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <script>
+        let steps = []; let currentStep = 0;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+        
+        async function startSort() {
+            const nums = document.getElementById('input').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            if (nums.length < 2) return alert('Введите минимум 2 числа!');
+            
+            const res = await fetch('/merge_sort/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({numbers: nums})
+            });
+            
+            const data = await res.json();
+            steps = data.steps;
+            currentStep = 0;
+            document.getElementById('total').textContent = steps.length;
+            document.getElementById('prevBtn').disabled = true;
+            nextStep();
+        }
+        
+        function nextStep() {
+            if (currentStep >= steps.length) return;
+            const step = steps[currentStep];
+            drawMerge(step);
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+            currentStep++;
+        }
+        
+        function prevStep() {
+            if (currentStep <= 0) return;
+            currentStep--;
+            const step = steps[currentStep];
+            drawMerge(step);
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+        }
+        
+        function drawMerge(step) {
+            ctx.clearRect(0, 0, 900, 450);
+            
+            if (step.left && step.right) {
+                // Рисуем левую и правую части
+                const leftMax = Math.max(...step.left);
+                const rightMax = Math.max(...step.right);
+                const maxH = 400;
+                
+                // Левая часть (зеленая)
+                const leftW = 400 / step.left.length;
+                for (let i = 0; i < step.left.length; i++) {
+                    ctx.fillStyle = step.i === i ? '#ff4444' : '#44ff44';
+                    ctx.fillRect(50 + i * leftW, 450 - (step.left[i] / leftMax * maxH), leftW - 2, step.left[i] / leftMax * maxH);
+                    ctx.fillStyle = '#000';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(step.left[i], 50 + i * leftW + leftW / 2, 440);
+                }
+                
+                // Правая часть (синяя)
+                const rightW = 400 / step.right.length;
+                for (let i = 0; i < step.right.length; i++) {
+                    ctx.fillStyle = step.j === i ? '#ff4444' : '#4444ff';
+                    ctx.fillRect(450 + i * rightW, 450 - (step.right[i] / rightMax * maxH), rightW - 2, step.right[i] / rightMax * maxH);
+                    ctx.fillStyle = '#000';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(step.right[i], 450 + i * rightW + rightW / 2, 440);
+                }
+                
+                // Объединенная часть
+                if (step.merged && step.merged.length > 0) {
+                    const mergedW = 900 / step.merged.length;
+                    for (let i = 0; i < step.merged.length; i++) {
+                        ctx.fillStyle = '#ffaa44';
+                        ctx.fillRect(i * mergedW, 50, mergedW - 2, 30);
+                        ctx.fillStyle = '#000';
+                        ctx.font = '12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(step.merged[i], i * mergedW + mergedW / 2, 70);
+                    }
+                }
+            }
+        }
+        
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight') nextStep();
+            if (e.key === 'ArrowLeft') prevStep();
+        });
+    </script>
+</body>
+</html>

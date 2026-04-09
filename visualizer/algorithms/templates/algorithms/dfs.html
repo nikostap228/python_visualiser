@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Поиск в глубину (DFS)</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'style.css' %}">
+</head>
+<body>
+    <h1>🌳 Поиск в глубину (DFS - рекурсия)</h1>
+   
+    <div id="controls">
+        <label>Граф (список смежности):</label><br>
+        <input type="text" id="graph" value="[[1,2],[0,3],[0,4],[1],[2]]">
+        <label>Старт:</label>
+        <input type="number" id="start" value="0" min="0" max="5">
+        <button onclick="startSearch()">▶️ Запустить DFS</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="nextStep()">➡️ Шаг</button>
+    </div>
+   
+    <canvas id="canvas" width="900" height="500"></canvas>
+    <div id="stack">Стек рекурсии: -</div>
+   
+    <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
+   
+    <pre id="code">def dfs(node):
+    visited[node] = True  # ← Помечаем текущий узел
+    print(f"Посещаем: {node}")
+    
+    for neighbor in graph[node]:
+        if not visited[neighbor]:
+            dfs(neighbor)  # ← Рекурсивный вызов (стек растет!)
+            # После возврата из рекурсии продолжаем</pre>
+
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+    <script>
+        let steps = []; 
+        let currentStep = 0;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+        
+        async function startSearch() {
+            const graph = JSON.parse(document.getElementById('graph').value);
+            const start = parseInt(document.getElementById('start').value);
+            
+            const res = await fetch('/dfs/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({graph: graph, start: start})
+            });
+            
+            if (!res.ok) {
+                return alert('Ошибка: ' + res.statusText);
+            }
+            
+            const data = await res.json();
+            steps = data.steps;
+            currentStep = 0;
+            document.getElementById('total').textContent = steps.length;
+            document.getElementById('prevBtn').disabled = true;
+            nextStep();
+        }
+        
+        function nextStep() {
+            if (currentStep >= steps.length) return;
+            const step = steps[currentStep];
+            drawGraph(step);
+            document.getElementById('stack').textContent = `Стек рекурсии: ${step.current}`;
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+            currentStep++;
+        }
+        
+        function prevStep() {
+            if (currentStep <= 0) return;
+            currentStep--;
+            const step = steps[currentStep];
+            drawGraph(step);
+            document.getElementById('stack').textContent = `Стек рекурсии: ${step.current}`;
+            document.getElementById('step').textContent = currentStep + 1;
+            document.getElementById('prevBtn').disabled = currentStep === 0;
+        }
+        
+        function drawGraph(step) {
+            ctx.clearRect(0, 0, 900, 500);
+            const n = step.graph.length;
+            const radius = 40;
+            const centerX = 450;
+            const centerY = 250;
+            const angleStep = (2 * Math.PI) / n;
+            
+            // Рисуем ребра
+            for (let i = 0; i < n; i++) {
+                for (let j of step.graph[i]) {
+                    const x1 = centerX + Math.cos(i * angleStep) * 150;
+                    const y1 = centerY + Math.sin(i * angleStep) * 150;
+                    const x2 = centerX + Math.cos(j * angleStep) * 150;
+                    const y2 = centerY + Math.sin(j * angleStep) * 150;
+                    
+                    ctx.strokeStyle = step.visited[i] && step.visited[j] ? '#44ff44' : '#666';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([]);
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.lineTo(x2, y2);
+                    ctx.stroke();
+                }
+            }
+            
+            // Рисуем узлы
+            for (let i = 0; i < n; i++) {
+                const x = centerX + Math.cos(i * angleStep) * 150;
+                const y = centerY + Math.sin(i * angleStep) * 150;
+                
+                let color = '#ddd';
+                if (step.visited[i]) {
+                    color = i === step.current ? '#ff4444' : '#44ff44';  // красный - текущий, зеленый - посещен
+                }
+                
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 24px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i.toString(), x, y);
+            }
+            
+            // Подпись текущего узла
+            if (step.current !== undefined) {
+                ctx.fillStyle = '#ff4444';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'top';
+                ctx.fillText('ТЕКУЩИЙ', centerX, 50);
+            }
+        }
+        
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight') nextStep();
+            if (e.key === 'ArrowLeft') prevStep();
+        });
+    </script>
+</body>
+</html>
