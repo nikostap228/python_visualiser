@@ -21,6 +21,7 @@
    
     <canvas id="canvas" width="900" height="500"></canvas>
     <div id="stack">Стек рекурсии: -</div>
+    <div id="visitedInfo">Посещены: -</div>
    
     <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
    
@@ -74,7 +75,8 @@
             if (currentStep >= steps.length) return;
             const step = steps[currentStep];
             drawGraph(step);
-            document.getElementById('stack').textContent = `Стек рекурсии: ${step.current}`;
+            document.getElementById('stack').textContent = `Стек рекурсии: [${step.stack.join(' → ')}]`;
+            document.getElementById('visitedInfo').textContent = `Посещены: [${step.visited.map((v, i) => v ? i : null).filter(v => v !== null).join(', ')}]`;
             document.getElementById('step').textContent = currentStep + 1;
             document.getElementById('prevBtn').disabled = currentStep === 0;
             currentStep++;

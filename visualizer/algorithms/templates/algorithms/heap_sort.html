@@ -5,125 +5,237 @@
     <title>Пирамидальная сортировка • Python визуализатор</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+    <style>
+        #legend {
+            width: 900px;
+            margin: 10px auto 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.85);
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #333;
+            display: inline-block;
+        }
+    </style>
 </head>
 <body>
     <h1>🏔️ Пирамидальная сортировка (Heapsort)</h1>
-   
+
     <div id="controls">
         <label>Введите числа (через запятую):</label><br>
         <input type="text" id="input" value="64,34,25,12,22,11,90,5,77,42">
         <button onclick="startSort()">▶️ Запустить Heapsort</button>
+        <button onclick="toggleAuto()" id="autoBtn">⏯️ Авто</button>
         <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
         <button onclick="nextStep()">➡️ Шаг</button>
     </div>
-   
+
+    <div id="legend">
+        <div class="legend-item"><span class="legend-color" style="background:#4CAF50;"></span>Уже отсортировано</div>
+        <div class="legend-item"><span class="legend-color" style="background:#F44336;"></span>Текущий элемент / swap</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FF9800;"></span>largest</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FFEB3B;"></span>Дети l и r</div>
+        <div class="legend-item"><span class="legend-color" style="background:#9E9E9E;"></span>Обычный элемент</div>
+    </div>
+
     <canvas id="canvas" width="900" height="450"></canvas>
-   
+
     <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
-   
+
     <pre id="code">def heapify(arr, n, i):
-    largest = i  
-    l = 2 * i + 1    
+    largest = i
+    l = 2 * i + 1
     r = 2 * i + 2
-    
+
     if l < n and arr[l] > arr[largest]:
         largest = l
-    
+
     if r < n and arr[r] > arr[largest]:
         largest = r
-    
+
     if largest != i:
         arr[i], arr[largest] = arr[largest], arr[i]
         heapify(arr, n, largest)
 
 def heap_sort(arr):
     n = len(arr)
-    # Строим Max Heap
     for i in range(n//2 - 1, -1, -1):
         heapify(arr, n, i)
-    
-    # Извлекаем элементы из кучи
+
     for i in range(n-1, 0, -1):
         arr[0], arr[i] = arr[i], arr[0]
         heapify(arr, i, 0)</pre>
 
     <script>
-        let steps = []; 
+        let steps = [];
         let currentStep = 0;
+        let autoTimer = null;
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        
+
         async function startSort() {
-            const nums = document.getElementById('input').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            stopAuto();
+
+            const nums = document.getElementById('input').value
+                .split(',')
+                .map(n => parseInt(n.trim()))
+                .filter(n => !isNaN(n));
+
             if (nums.length < 2) return alert('Введите минимум 2 числа!');
-            
+
             const res = await fetch('/heap_sort/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({numbers: nums})
+                body: JSON.stringify({ numbers: nums })
             });
-            
+
             if (!res.ok) {
                 return alert('Ошибка: ' + res.statusText);
             }
-            
+
             const data = await res.json();
-            steps = data.steps;
+            steps = data.steps || [];
             currentStep = 0;
             document.getElementById('total').textContent = steps.length;
+            document.getElementById('step').textContent = '0';
             document.getElementById('prevBtn').disabled = true;
-            nextStep();
+
+            if (steps.length > 0) nextStep();
         }
-        
+
         function nextStep() {
-            if (currentStep >= steps.length) return;
+            if (currentStep >= steps.length) {
+                stopAuto();
+                return;
+            }
+
             const step = steps[currentStep];
             drawArray(step.array, step);
+
             document.getElementById('step').textContent = currentStep + 1;
             document.getElementById('prevBtn').disabled = currentStep === 0;
             currentStep++;
         }
-        
+
         function prevStep() {
+            stopAuto();
+
             if (currentStep <= 0) return;
             currentStep--;
+
             const step = steps[currentStep];
             drawArray(step.array, step);
+
             document.getElementById('step').textContent = currentStep + 1;
             document.getElementById('prevBtn').disabled = currentStep === 0;
         }
-        
+
+        function toggleAuto() {
+            if (autoTimer) {
+                stopAuto();
+                return;
+            }
+
+            if (!steps.length) {
+                startSort().then(() => {
+                    startAuto();
+                });
+            } else {
+                startAuto();
+            }
+        }
+
+        function startAuto() {
+            document.getElementById('autoBtn').textContent = '⏸ Пауза';
+            autoTimer = setInterval(() => {
+                if (currentStep >= steps.length) {
+                    stopAuto();
+                    return;
+                }
+                nextStep();
+            }, 800);
+        }
+
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            const btn = document.getElementById('autoBtn');
+            if (btn) btn.textContent = '⏯️ Авто';
+        }
+
         function drawArray(arr, info) {
             ctx.clearRect(0, 0, 900, 450);
             const max = Math.max(...arr);
             const w = 900 / arr.length;
-            
+
             for (let i = 0; i < arr.length; i++) {
-                let color = `hsl(${arr[i] / max * 360}, 70%, 50%)`;
-                
-                // Подсвечиваем активные элементы
-                if (i === info.largest || i === info.i || i === info.root) {
-                    color = '#ff4444';  // Красный для сравниваемых
-                } else if (i === info.l || i === info.r) {
-                    color = '#ffaa00';  // Оранжевый для детей
-                } else if (info.heap_size && i >= info.heap_size) {
-                    color = '#44ff44';  // Зеленый для отсортированной части
+                let color = '#9E9E9E';
+
+                if (info.heap_size && i >= info.heap_size) {
+                    color = '#4CAF50';
                 }
-                
+
+                if (i === info.l || i === info.r) {
+                    color = '#FFEB3B';
+                }
+
+                if (i === info.largest) {
+                    color = '#FF9800';
+                }
+
+                if (i === info.i || i === info.root || info.swap_root) {
+                    color = '#F44336';
+                }
+
+                if (info.phase === 'extract' && i >= info.heap_size) {
+                    color = '#4CAF50';
+                }
+
+                const h = (arr[i] / max) * 400;
                 ctx.fillStyle = color;
-                ctx.fillRect(i * w, 450 - (arr[i] / max * 400), w - 2, arr[i] / max * 400);
+                ctx.fillRect(i * w, 450 - h, w - 2, h);
+
                 ctx.fillStyle = '#000';
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText(arr[i], i * w + w / 2, 440);
             }
+
+            let status = 'Ожидание';
+            if (info.phase === 'build') status = 'Построение кучи';
+            if (info.phase === 'heapify') status = 'Heapify';
+            if (info.phase === 'extract') status = 'Извлечение максимума';
+
+            ctx.fillStyle = '#333';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Фаза: ${status}`, 20, 25);
         }
-        
+
         document.addEventListener('keydown', e => {
             if (e.key === 'ArrowRight') nextStep();
             if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleAuto();
+            }
         });
     </script>
 </body>

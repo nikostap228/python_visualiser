@@ -2,29 +2,89 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Быстрая сортировка • Python визуализатор</title>
+    <title>⚡ Быстрая сортировка • Python визуализатор</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+
+    <style>
+        #legend {
+            width: 900px;
+            margin: 10px auto 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.85);
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #333;
+            display: inline-block;
+        }
+        #status {
+            margin-top: 12px;
+            font-weight: bold;
+        }
+    </style>
+
+    <script>
+        function getCookie(name){
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== "") {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</head>
 <body>
     <h1>⚡ Быстрая сортировка (Quicksort)</h1>
-   
+
     <div id="controls">
-        <label>Введите числа (через запятую):</label><br>
+        <label>Числа (через запятую):</label><br>
         <input type="text" id="input" value="64,34,25,12,22,11,90,5,77,42">
-        <button onclick="startSort()">▶️ Запустить Quicksort</button>
-        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="startSort()">▶️ Запустить</button>
+        <button onclick="toggleAuto()" id="autoBtn">⏯️ Авто</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Шаг назад</button>
         <button onclick="nextStep()">➡️ Шаг</button>
+        <div id="status">Готов к запуску</div>
     </div>
-   
+
+    <div id="legend">
+        <div class="legend-item"><span class="legend-color" style="background:#4CAF50;"></span>Уже отсортировано</div>
+        <div class="legend-item"><span class="legend-color" style="background:#9C27B0;"></span>Pivot</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FF5722;"></span>Текущий j</div>
+        <div class="legend-item"><span class="legend-color" style="background:#F44336;"></span>Позиция i</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FFEB3B;"></span>Больше pivot</div>
+        <div class="legend-item"><span class="legend-color" style="background:#9E9E9E;"></span>Обычный элемент</div>
+    </div>
+
     <canvas id="canvas" width="900" height="450"></canvas>
-   
-    <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
-   
+
+    <div id="info">Шаг: <span id="step">0</span>/<span id="total">0</span></div>
+
     <pre id="code">def partition(arr, low, high):
     pivot = arr[high]
     i = low - 1
     for j in range(low, high):
-        if arr[j] < pivot:      # ← Сравнение с pivot
+        if arr[j] < pivot:
             i += 1
             arr[i], arr[j] = arr[j], arr[i]
     arr[i + 1], arr[high] = arr[high], arr[i + 1]
@@ -36,85 +96,167 @@ def quicksort(arr, low, high):
         quicksort(arr, low, pi - 1)
         quicksort(arr, pi + 1, high)</pre>
 
-    <!-- CSRF токен мета-тег -->
-    <meta name="csrf-token" content="{{ csrf_token }}">
-
     <script>
-        let steps = []; 
+        let steps = [];
         let currentStep = 0;
+        let autoTimer = null;
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        
-        // Получаем CSRF токен
-        function getCsrfToken() {
-            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        }
-     
+
         async function startSort() {
-            const nums = document.getElementById('input').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-            if (nums.length < 2) return alert('Введите минимум 2 числа!');
-            
-            const csrfToken = getCsrfToken();
-            
-            const res = await fetch('/quick_sort/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
+            stopAuto();
+
+            const nums = $('#input').val()
+                .split(',')
+                .map(n => parseInt(n.trim()))
+                .filter(n => !isNaN(n));
+
+            if (nums.length < 2) return alert('Минимум 2 числа!');
+
+            $('#status').text('Запуск...');
+
+            $.ajax({
+                url: '/quick_sort/',
+                type: 'POST',
+                data: JSON.stringify({ numbers: nums }),
+                contentType: 'application/json',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(data) {
+                    steps = data.steps || [];
+                    currentStep = 0;
+                    $('#total').text(steps.length);
+                    $('#step').text('0');
+                    $('#prevBtn').prop('disabled', true);
+                    $('#status').text('Готово! ' + steps.length + ' шагов');
+                    if (steps.length > 0) nextStep();
                 },
-                body: JSON.stringify({numbers: nums})
+                error: function(xhr, status, error) {
+                    $('#status').text('Ошибка ' + xhr.status + ': ' + error);
+                    console.error('AJAX Error:', xhr.responseText);
+                }
             });
-            
-            if (!res.ok) {
-                return alert('Ошибка: ' + res.statusText);
-            }
-            
-            const data = await res.json();
-            steps = data.steps;
-            currentStep = 0;
-            document.getElementById('total').textContent = steps.length;
-            document.getElementById('prevBtn').disabled = true;
-            nextStep();
         }
-     
+
         function nextStep() {
-            if (currentStep >= steps.length) return;
+            if (currentStep >= steps.length) {
+                stopAuto();
+                $('#status').text('✅ Сортировка завершена!');
+                return;
+            }
             const step = steps[currentStep];
             drawArray(step.array, step);
-            document.getElementById('step').textContent = currentStep + 1;
-            document.getElementById('prevBtn').disabled = currentStep === 0;
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            updateStatus(step);
             currentStep++;
         }
-     
+
         function prevStep() {
+            stopAuto();
             if (currentStep <= 0) return;
             currentStep--;
             const step = steps[currentStep];
             drawArray(step.array, step);
-            document.getElementById('step').textContent = currentStep + 1;
-            document.getElementById('prevBtn').disabled = currentStep === 0;
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            updateStatus(step);
         }
-     
+
+        function toggleAuto() {
+            if (autoTimer) {
+                stopAuto();
+                return;
+            }
+            if (!steps.length) {
+                startSort();
+            } else {
+                startAuto();
+            }
+        }
+
+        function startAuto() {
+            $('#autoBtn').text('⏸ Пауза');
+            autoTimer = setInterval(() => {
+                if (currentStep >= steps.length) {
+                    stopAuto();
+                    return;
+                }
+                nextStep();
+            }, 700);
+        }
+
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            $('#autoBtn').text('⏯️ Авто');
+        }
+
+        function updateStatus(step) {
+            let status = 'Инициализация';
+            if (step.phase === 'choose_pivot') status = `Выбран pivot: ${step.pivot}`;
+            if (step.phase === 'compare') status = `Сравнение: ${step.array[step.j]} и pivot ${step.pivot}`;
+            if (step.phase === 'swap') status = `Меняем элементы на позициях ${step.i} и ${step.j}`;
+            if (step.phase === 'final_swap') status = `Ставим pivot на позицию ${step.pi}`;
+            if (step.phase === 'partition_done') status = `Partition завершен, pivot на позиции ${step.pi}`;
+            if (step.phase === 'done') status = 'Сортировка завершена';
+            $('#status').text(status);
+        }
+
         function drawArray(arr, info) {
             ctx.clearRect(0, 0, 900, 450);
             const max = Math.max(...arr);
             const w = 900 / arr.length;
+
+            if (info.low !== undefined && info.high !== undefined) {
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(info.low * w - 2, 60, (info.high - info.low + 1) * w + 4, 380);
+            }
+
             for (let i = 0; i < arr.length; i++) {
-                let color = `hsl(${arr[i] / max * 360}, 70%, 50%)`;
-                if (i === info.j || i === info.pivot_idx || i === info.high) color = '#ff4444';
-                else if (i === info.i) color = '#ffaa00';
+                let color = '#9E9E9E';
+
+                if ((info.sorted_left !== undefined && i < info.sorted_left) ||
+                    (info.sorted_right !== undefined && i > info.sorted_right)) {
+                    color = '#4CAF50';
+                } else if (i === info.pivot_idx || i === info.high) {
+                    color = '#9C27B0';
+                } else if (i === info.j) {
+                    color = '#FF5722';
+                } else if (i === info.i) {
+                    color = '#F44336';
+                } else if (info.pivot !== undefined && arr[i] > info.pivot) {
+                    color = '#FFEB3B';
+                }
+
+                const h = (arr[i] / max) * 380;
                 ctx.fillStyle = color;
-                ctx.fillRect(i * w, 450 - (arr[i] / max * 400), w - 2, arr[i] / max * 400);
+                ctx.fillRect(i * w, 450 - h, w - 2, h);
+
                 ctx.fillStyle = '#000';
-                ctx.font = '12px Arial';
+                ctx.font = 'bold 13px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText(arr[i], i * w + w / 2, 440);
             }
+
+            if (info.pivot !== undefined) {
+                ctx.fillStyle = '#9C27B0';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Pivot: ${info.pivot}`, 450, 35);
+            }
         }
-     
-        document.addEventListener('keydown', e => {
+
+        $(document).keydown(function(e){
             if (e.key === 'ArrowRight') nextStep();
             if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleAuto();
+            }
         });
     </script>
 </body>

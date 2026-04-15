@@ -2,30 +2,88 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Сортировка слиянием</title>
+    <title>🔗 Сортировка слиянием</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+
+    <style>
+        #legend {
+            width: 900px;
+            margin: 10px auto 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.85);
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #333;
+            display: inline-block;
+        }
+        #status {
+            margin-top: 12px;
+            font-weight: bold;
+        }
+    </style>
+
+    <script>
+        function getCookie(name){
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== "") {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
 </head>
 <body>
     <h1>🔗 Сортировка слиянием (Merge Sort)</h1>
-   
+
     <div id="controls">
-        <label>Введите числа (через запятую):</label><br>
+        <label>Числа (через запятую):</label><br>
         <input type="text" id="input" value="64,34,25,12,22,11,90,5">
-        <button onclick="startSort()">▶️ Запустить Merge Sort</button>
-        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="startSort()">▶️ Запустить</button>
+        <button onclick="toggleAuto()" id="autoBtn">⏯️ Авто</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Шаг назад</button>
         <button onclick="nextStep()">➡️ Шаг</button>
+        <div id="status">Готов к запуску</div>
     </div>
-   
+
+    <div id="legend">
+        <div class="legend-item"><span class="legend-color" style="background:#4CAF50;"></span>Левая отсортированная часть</div>
+        <div class="legend-item"><span class="legend-color" style="background:#2196F3;"></span>Правая отсортированная часть</div>
+        <div class="legend-item"><span class="legend-color" style="background:#F44336;"></span>Текущий сравниваемый (левый)</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FF5722;"></span>Текущий сравниваемый (правый)</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FFEB3B;"></span>Добавлен в результат</div>
+    </div>
+
     <canvas id="canvas" width="900" height="450"></canvas>
-   
-    <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
-   
+
+    <div id="info">Шаг: <span id="step">0</span>/<span id="total">0</span></div>
+
     <pre id="code">def merge(left, right):
     result = []
     i = j = 0
     while i < len(left) and j < len(right):
-        if left[i] <= right[j]:  # ← Берем меньший
+        if left[i] <= right[j]:
             result.append(left[i])
             i += 1
         else:
@@ -38,105 +96,209 @@ def mergesort(arr):
     mid = len(arr) // 2
     return merge(mergesort(arr[:mid]), mergesort(arr[mid:]))</pre>
 
-    <meta name="csrf-token" content="{{ csrf_token }}">
-
     <script>
-        let steps = []; let currentStep = 0;
+        let steps = [];
+        let currentStep = 0;
+        let autoTimer = null;
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        
-        function getCsrfToken() {
-            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        }
-        
+
         async function startSort() {
-            const nums = document.getElementById('input').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-            if (nums.length < 2) return alert('Введите минимум 2 числа!');
-            
-            const res = await fetch('/merge_sort/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken()
+            stopAuto();
+
+            const nums = $('#input').val().split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            if (nums.length < 2) return alert('Минимум 2 числа!');
+
+            $('#status').text('Запуск...');
+
+            $.ajax({
+                url: '/merge_sort/',
+                type: 'POST',
+                data: JSON.stringify({ numbers: nums }),
+                contentType: 'application/json',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(data) {
+                    steps = data.steps || [];
+                    currentStep = 0;
+                    $('#total').text(steps.length);
+                    $('#step').text('0');
+                    $('#prevBtn').prop('disabled', true);
+                    $('#status').text('Готово! ' + steps.length + ' шагов');
+                    if (steps.length > 0) nextStep();
                 },
-                body: JSON.stringify({numbers: nums})
+                error: function(xhr, status, error) {
+                    $('#status').text('Ошибка ' + xhr.status + ': ' + error);
+                    console.error('AJAX Error:', xhr.responseText);
+                }
             });
-            
-            const data = await res.json();
-            steps = data.steps;
-            currentStep = 0;
-            document.getElementById('total').textContent = steps.length;
-            document.getElementById('prevBtn').disabled = true;
-            nextStep();
         }
-        
+
         function nextStep() {
-            if (currentStep >= steps.length) return;
+            if (currentStep >= steps.length) {
+                stopAuto();
+                $('#status').text('✅ Сортировка завершена!');
+                return;
+            }
             const step = steps[currentStep];
             drawMerge(step);
-            document.getElementById('step').textContent = currentStep + 1;
-            document.getElementById('prevBtn').disabled = currentStep === 0;
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            updateStatus(step);
             currentStep++;
         }
-        
+
         function prevStep() {
+            stopAuto();
             if (currentStep <= 0) return;
             currentStep--;
             const step = steps[currentStep];
             drawMerge(step);
-            document.getElementById('step').textContent = currentStep + 1;
-            document.getElementById('prevBtn').disabled = currentStep === 0;
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            updateStatus(step);
         }
-        
+
+        function toggleAuto() {
+            if (autoTimer) {
+                stopAuto();
+                return;
+            }
+            if (!steps.length) {
+                startSort();
+            } else {
+                startAuto();
+            }
+        }
+
+        function startAuto() {
+            $('#autoBtn').text('⏸ Пауза');
+            autoTimer = setInterval(() => {
+                if (currentStep >= steps.length) {
+                    stopAuto();
+                    return;
+                }
+                nextStep();
+            }, 700);
+        }
+
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            $('#autoBtn').text('⏯️ Авто');
+        }
+
+        function updateStatus(step) {
+            let status = 'Разделение массивов';
+            if (step.phase === 'compare') status = `Сравниваем: ${step.left[step.i] || '?'} vs ${step.right[step.j] || '?'}`;
+            if (step.phase === 'take_left') status = `Берем из левой: ${step.left[step.i]}`;
+            if (step.phase === 'take_right') status = `Берем из правой: ${step.right[step.j]}`;
+            if (step.phase === 'merge_done') status = 'Слияние завершено';
+            if (step.phase === 'final') status = 'Полный отсортированный массив';
+            $('#status').text(status);
+        }
+
         function drawMerge(step) {
             ctx.clearRect(0, 0, 900, 450);
-            
+
+
+            if (step.array && step.phase === 'final') {
+                const max = Math.max(...step.array, 1);
+                const w = 900 / step.array.length;
+                for (let i = 0; i < step.array.length; i++) {
+                    ctx.fillStyle = '#9C27B0';
+                    ctx.fillRect(i * w, 100, w - 2, (step.array[i] / max) * 300);
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(step.array[i], i * w + w / 2, 95);
+                }
+                ctx.fillStyle = '#4CAF50';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('✅ ОТСОРТИРОВАН!', 450, 430);
+                return;
+            }
+
+            // Слияние двух массивов
             if (step.left && step.right) {
-                // Рисуем левую и правую части
-                const leftMax = Math.max(...step.left);
-                const rightMax = Math.max(...step.right);
-                const maxH = 400;
-                
-                // Левая часть (зеленая)
-                const leftW = 400 / step.left.length;
-                for (let i = 0; i < step.left.length; i++) {
-                    ctx.fillStyle = step.i === i ? '#ff4444' : '#44ff44';
-                    ctx.fillRect(50 + i * leftW, 450 - (step.left[i] / leftMax * maxH), leftW - 2, step.left[i] / leftMax * maxH);
-                    ctx.fillStyle = '#000';
-                    ctx.font = '12px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(step.left[i], 50 + i * leftW + leftW / 2, 440);
-                }
-                
-                // Правая часть (синяя)
-                const rightW = 400 / step.right.length;
-                for (let i = 0; i < step.right.length; i++) {
-                    ctx.fillStyle = step.j === i ? '#ff4444' : '#4444ff';
-                    ctx.fillRect(450 + i * rightW, 450 - (step.right[i] / rightMax * maxH), rightW - 2, step.right[i] / rightMax * maxH);
-                    ctx.fillStyle = '#000';
-                    ctx.font = '12px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(step.right[i], 450 + i * rightW + rightW / 2, 440);
-                }
-                
-                // Объединенная часть
+                ctx.fillStyle = '#4CAF50';
+                ctx.font = 'bold 16px Arial';
+                ctx.textAlign = 'center';
+
+                ctx.fillStyle = '#2196F3';
+
                 if (step.merged && step.merged.length > 0) {
+                    ctx.fillStyle = '#333';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'center';
+
+                }
+                
+                const leftMax = Math.max(...step.left, 1);
+                const leftW = 400 / step.left.length || 40;
+                for (let i = 0; i < step.left.length; i++) {
+                    let color = '#4CAF50';
+                    if (step.i === i && (step.phase === 'compare' || step.phase === 'take_left')) {
+                        color = '#F44336';
+                    }
+                    ctx.fillStyle = color;
+                    ctx.fillRect(20 + i * leftW, 100, leftW - 2, (step.left[i] / leftMax) * 280);
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(step.left[i], 20 + i * leftW + leftW / 2, 95);
+                }
+
+                // Правая часть (синяя)
+                const rightMax = Math.max(...step.right, 1);
+                const rightW = 400 / step.right.length || 40;
+                for (let i = 0; i < step.right.length; i++) {
+                    let color = '#2196F3';
+                    if (step.j === i && (step.phase === 'compare' || step.phase === 'take_right')) {
+                        color = '#FF5722';
+                    }
+                    ctx.fillStyle = color;
+                    ctx.fillRect(440 + i * rightW, 100, rightW - 2, (step.right[i] / rightMax) * 280);
+                    ctx.fillStyle = '#000';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(step.right[i], 440 + i * rightW + rightW / 2, 95);
+                }
+
+                // Результат слияния (с отступом от заголовка)
+                if (step.merged && step.merged.length > 0) {
+                    const mergedMax = Math.max(...step.merged, 1);
                     const mergedW = 900 / step.merged.length;
                     for (let i = 0; i < step.merged.length; i++) {
-                        ctx.fillStyle = '#ffaa44';
-                        ctx.fillRect(i * mergedW, 50, mergedW - 2, 30);
+                        let color = '#FFEB3B';
+                        if (step.phase === 'merge_done') color = '#9C27B0';
+                        ctx.fillStyle = color;
+                        ctx.fillRect(i * mergedW, 25, mergedW - 2, (step.merged[i] / mergedMax) * 60); // отступ 20px от заголовка
                         ctx.fillStyle = '#000';
-                        ctx.font = '12px Arial';
+                        ctx.font = 'bold 11px Arial';
                         ctx.textAlign = 'center';
-                        ctx.fillText(step.merged[i], i * mergedW + mergedW / 2, 70);
+                        ctx.fillText(step.merged[i], i * mergedW + mergedW / 2, 22);
                     }
                 }
             }
+
+            // Статус в углу
+            let status = step.phase || 'Ожидание';
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Фаза: ${status}`, 20, 430);
         }
-        
-        document.addEventListener('keydown', e => {
+
+        $(document).keydown(function(e){
             if (e.key === 'ArrowRight') nextStep();
             if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleAuto();
+            }
         });
     </script>
 </body>

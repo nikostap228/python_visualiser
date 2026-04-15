@@ -2,103 +2,256 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Сортировка вставками</title>
+    <title>🔤 Сортировка вставками</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+
+    <style>
+        #legend {
+            width: 900px;
+            margin: 10px auto 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 18px;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.85);
+            padding: 6px 10px;
+            border-radius: 8px;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #333;
+            display: inline-block;
+        }
+        #status {
+            margin-top: 12px;
+            font-weight: bold;
+        }
+    </style>
+
+    <script>
+        function getCookie(name){
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== "") {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
 </head>
 <body>
     <h1>🔤 Сортировка вставками (Insertion Sort)</h1>
-   
+
     <div id="controls">
-        <label>Введите числа (через запятую):</label><br>
+        <label>Числа (через запятую):</label><br>
         <input type="text" id="input" value="64,34,25,12,22,11,90,5">
-        <button onclick="startSort()">▶️ Запустить Insertion Sort</button>
-        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
+        <button onclick="startSort()">▶️ Запустить</button>
+        <button onclick="toggleAuto()" id="autoBtn">⏯️ Авто</button>
+        <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Шаг назад</button>
         <button onclick="nextStep()">➡️ Шаг</button>
+        <div id="status">Готов к запуску</div>
     </div>
-   
+
+    <div id="legend">
+        <div class="legend-item"><span class="legend-color" style="background:#4CAF50;"></span>Уже отсортировано</div>
+        <div class="legend-item"><span class="legend-color" style="background:#F44336;"></span>Ключ (выбираемый)</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FF9800;"></span>Сдвигаемый элемент</div>
+        <div class="legend-item"><span class="legend-color" style="background:#FFEB3B;"></span>Сравниваемый элемент</div>
+        <div class="legend-item"><span class="legend-color" style="background:#9E9E9E;"></span>Обычный элемент</div>
+    </div>
+
     <canvas id="canvas" width="900" height="450"></canvas>
-   
-    <div id="info">Шаг: <span id="step">0</span> / <span id="total">0</span></div>
-   
-    <pre id="code">for i in range(1, len(arr)):
-    key = arr[i]
-    j = i - 1
-    while j >= 0 and arr[j] > key:  # ← Сдвиг больших элементов
-        arr[j + 1] = arr[j]
-        j -= 1
-    arr[j + 1] = key  # ← Вставка key</pre>
+
+    <div id="info">Шаг: <span id="step">0</span>/<span id="total">0</span></div>
+
+    <pre id="code">def insertion_sort(arr):
+    for i in range(1, len(arr)):
+        key = arr[i]
+        j = i - 1
+        while j >= 0 and arr[j] > key:
+            arr[j + 1] = arr[j]
+            j -= 1
+        arr[j + 1] = key</pre>
 
     <meta name="csrf-token" content="{{ csrf_token }}">
 
     <script>
-        let steps = []; let currentStep = 0;
+        let steps = [];
+        let currentStep = 0;
+        let autoTimer = null;
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        
-        function getCsrfToken() {
-            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        }
-        
+
         async function startSort() {
-            const nums = document.getElementById('input').value.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
-            if (nums.length < 2) return alert('Введите минимум 2 числа!');
-            
-            const res = await fetch('/insertion_sort/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken()
+            stopAuto();
+
+            const nums = $('#input').val().split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+            if (nums.length < 2) return alert('Минимум 2 числа!');
+
+            $('#status').text('Запуск...');
+
+            $.ajax({
+                url: '/insertion_sort/',
+                type: 'POST',
+                data: JSON.stringify({ numbers: nums }),
+                contentType: 'application/json',
+                headers: {'X-CSRFToken': getCookie('csrftoken')},
+                success: function(data) {
+                    steps = data.steps || [];
+                    currentStep = 0;
+                    $('#total').text(steps.length);
+                    $('#step').text('0');
+                    $('#prevBtn').prop('disabled', true);
+                    $('#status').text('Готово! ' + steps.length + ' шагов');
+                    if (steps.length > 0) nextStep();
                 },
-                body: JSON.stringify({numbers: nums})
+                error: function(xhr, status, error) {
+                    $('#status').text('Ошибка ' + xhr.status + ': ' + error);
+                    console.error('AJAX Error:', xhr.responseText);
+                }
             });
-            
-            const data = await res.json();
-            steps = data.steps;
-            currentStep = 0;
-            document.getElementById('total').textContent = steps.length;
-            document.getElementById('prevBtn').disabled = true;
-            nextStep();
         }
-        
+
         function nextStep() {
-            if (currentStep >= steps.length) return;
+            if (currentStep >= steps.length) {
+                stopAuto();
+                $('#status').text('Сортировка завершена!');
+                return;
+            }
             const step = steps[currentStep];
             drawArray(step.array, step);
-            document.getElementById('step').textContent = currentStep + 1;
-            document.getElementById('prevBtn').disabled = currentStep === 0;
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            updateStatus(step);
             currentStep++;
         }
-        
+
         function prevStep() {
+            stopAuto();
+
             if (currentStep <= 0) return;
             currentStep--;
             const step = steps[currentStep];
             drawArray(step.array, step);
-            document.getElementById('step').textContent = currentStep + 1;
-            document.getElementById('prevBtn').disabled = currentStep === 0;
+            $('#step').text(currentStep + 1);
+            $('#prevBtn').prop('disabled', currentStep === 0);
+            updateStatus(step);
         }
-        
+
+        function toggleAuto() {
+            if (autoTimer) {
+                stopAuto();
+                return;
+            }
+
+            if (!steps.length) {
+                startSort();
+            } else {
+                startAuto();
+            }
+        }
+
+        function startAuto() {
+            $('#autoBtn').text('⏸ Пауза');
+            autoTimer = setInterval(() => {
+                if (currentStep >= steps.length) {
+                    stopAuto();
+                    return;
+                }
+                nextStep();
+            }, 700);
+        }
+
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            $('#autoBtn').text('⏯️ Авто');
+        }
+
+        function updateStatus(step) {
+            let status = 'Инициализация';
+            if (step.phase === 'key') status = `Выбран ключ: ${step.key}`;
+            if (step.phase === 'shift') status = `Сдвигаем ${step.array[step.j+1]} → позиция ${step.j+1}`;
+            if (step.phase === 'insert') status = `Вставляем ${step.key} на позицию ${step.j}`;
+            if (step.phase === 'done') status = 'Итерация завершена';
+            $('#status').text(status);
+        }
+
         function drawArray(arr, info) {
             ctx.clearRect(0, 0, 900, 450);
             const max = Math.max(...arr);
             const w = 900 / arr.length;
+
             for (let i = 0; i < arr.length; i++) {
-                let color = `hsl(${arr[i] / max * 360}, 70%, 50%)`;
-                if (i === info.i) color = '#ff4444';  // текущий элемент
-                else if (info.j !== undefined && i === info.j) color = '#ffaa00';  // сдвигаемый
+                let color = '#9E9E9E'; // серый - обычный
+
+                // Зеленый - отсортированная часть
+                if (info.sorted_upto !== undefined && i < info.sorted_upto) {
+                    color = '#4CAF50';
+                }
+                // Красный - текущий ключ
+                else if (i === info.i) {
+                    color = '#F44336';
+                }
+                // Оранжевый - сдвигаемый элемент
+                else if (info.j !== undefined && i === info.j) {
+                    color = '#FF9800';
+                }
+                // Желтый - сравниваемый элемент (позиция вставки)
+                else if (info.j !== undefined && i === info.j + 1 && info.phase !== 'insert') {
+                    color = '#FFEB3B';
+                }
+                // Фиолетовый - финальная позиция вставки
+                else if (info.phase === 'insert' && i === info.j) {
+                    color = '#9C27B0';
+                }
+
+                const h = (arr[i] / max) * 400;
                 ctx.fillStyle = color;
-                ctx.fillRect(i * w, 450 - (arr[i] / max * 400), w - 2, arr[i] / max * 400);
+                ctx.fillRect(i * w, 450 - h, w - 2, h);
+
                 ctx.fillStyle = '#000';
                 ctx.font = '12px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText(arr[i], i * w + w / 2, 440);
             }
+
+            // Статус в углу
+            let status = 'Ожидание';
+            if (info.phase === 'key') status = 'Выбор ключа';
+            if (info.phase === 'shift') status = 'Сдвиг элементов';
+            if (info.phase === 'insert') status = 'Вставка ключа';
+
+            ctx.fillStyle = '#333';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Фаза: ${status}`, 20, 25);
         }
-        
-        document.addEventListener('keydown', e => {
+
+        $(document).keydown(function(e){
             if (e.key === 'ArrowRight') nextStep();
             if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleAuto();
+            }
         });
     </script>
 </body>
