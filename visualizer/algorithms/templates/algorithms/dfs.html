@@ -5,6 +5,7 @@
     <title>Поиск в глубину (DFS)</title>
     {% load static %}
     <link rel="stylesheet" href="{% static 'style.css' %}">
+    <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
 <body>
     <h1>🌳 Поиск в глубину (DFS - рекурсия)</h1>
@@ -15,6 +16,7 @@
         <label>Старт:</label>
         <input type="number" id="start" value="0" min="0" max="5">
         <button onclick="startSearch()">▶️ Запустить DFS</button>
+        <button onclick="toggleAuto()" id="autoBtn">⏯️ Авто</button>
         <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
         <button onclick="nextStep()">➡️ Шаг</button>
     </div>
@@ -34,19 +36,55 @@
             dfs(neighbor)  # ← Рекурсивный вызов (стек растет!)
             # После возврата из рекурсии продолжаем</pre>
 
-    <meta name="csrf-token" content="{{ csrf_token }}">
-
     <script>
         let steps = []; 
         let currentStep = 0;
+        let autoTimer = null;
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        
+        //  Автовоспроизведение 
+        function toggleAuto() {
+            if (autoTimer) {
+                stopAuto();
+                return;
+            }
+            if (!steps.length) {
+                startSearch().then(() => startAuto());
+            } else {
+                startAuto();
+            }
+        }
+
+        function startAuto() {
+            const btn = document.getElementById('autoBtn');
+            if (btn) btn.textContent = '⏸ Пауза';
+            autoTimer = setInterval(() => {
+                if (currentStep >= steps.length) {
+                    stopAuto();
+                    return;
+                }
+                nextStep();
+            }, 700);
+        }
+
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            const btn = document.getElementById('autoBtn');
+            if (btn) btn.textContent = '⏯️ Авто';
+        }
         
         function getCsrfToken() {
             return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         }
         
+        //  Запуск DFS 
         async function startSearch() {
+            stopAuto();  // останавливаем автовоспроизведение при новом запуске
+
             const graph = JSON.parse(document.getElementById('graph').value);
             const start = parseInt(document.getElementById('start').value);
             
@@ -67,12 +105,16 @@
             steps = data.steps;
             currentStep = 0;
             document.getElementById('total').textContent = steps.length;
+            document.getElementById('step').textContent = '0';
             document.getElementById('prevBtn').disabled = true;
             nextStep();
         }
         
         function nextStep() {
-            if (currentStep >= steps.length) return;
+            if (currentStep >= steps.length) {
+                stopAuto();
+                return;
+            }
             const step = steps[currentStep];
             drawGraph(step);
             document.getElementById('stack').textContent = `Стек рекурсии: [${step.stack.join(' → ')}]`;
@@ -83,11 +125,17 @@
         }
         
         function prevStep() {
+            stopAuto();  // ручной шаг назад останавливает авто
             if (currentStep <= 0) return;
             currentStep--;
             const step = steps[currentStep];
             drawGraph(step);
-            document.getElementById('stack').textContent = `Стек рекурсии: ${step.current}`;
+            document.getElementById('stack').textContent = `Стек рекурсии: [${step.stack.join(' → ')}]`;
+            const visitedNodes = step.visited
+                .map((v, i) => v ? i : null)
+                .filter(v => v !== null)
+                .join(', ');
+            document.getElementById('visitedInfo').textContent = `Посещены: [${visitedNodes}]`;
             document.getElementById('step').textContent = currentStep + 1;
             document.getElementById('prevBtn').disabled = currentStep === 0;
         }
@@ -156,6 +204,10 @@
         document.addEventListener('keydown', e => {
             if (e.key === 'ArrowRight') nextStep();
             if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleAuto();
+            }
         });
     </script>
 </body>

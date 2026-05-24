@@ -2,41 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>🔍 BFS</title>
+    <title>🔍 BFS (поиск в ширину)</title>
     {% load static %}
-    <link rel="stylesheet" href="{% static 'bfs.css' %}">
     <meta name="csrf-token" content="{{ csrf_token }}">
-
-    <style>
-        #graphInput {
-            width: 900px;
-            max-width: 100%;
-            height: 130px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-
-        #legend {
-            text-align: center;
-            margin: 10px 0 20px;
-            font-size: 16px;
-        }
-
-        .legend {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            vertical-align: middle;
-            margin: 0 6px 0 14px;
-            border: 1px solid #333;
-        }
-
-        #queueInfo {
-            font-weight: bold;
-        }
-    </style>
+    <link rel="stylesheet" href="{% static 'bfs.css' %}">
 </head>
 <body>
     <h1>🔍 Поиск в ширину (BFS)</h1>
@@ -65,6 +34,7 @@
         <input type="number" id="start" value="0" min="0" style="width:80px;"><br>
 
         <button onclick="startBFS()">▶️ Запустить BFS</button>
+        <button onclick="toggleAuto()" id="autoBtn">⏯️ Авто</button>
         <button onclick="prevStep()" id="prevBtn" disabled>⬅️ Назад</button>
         <button onclick="nextStep()">➡️ Шаг</button>
     </div>
@@ -102,9 +72,43 @@ def bfs(graph, start):
     <script>
         let steps = [];
         let currentStep = 0;
+        let autoTimer = null;
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const nodeRadius = 24;
+
+        function toggleAuto() {
+            if (autoTimer) {
+                stopAuto();
+                return;
+            }
+            if (!steps.length) {
+                startBFS().then(() => startAuto());
+            } else {
+                startAuto();
+            }
+        }
+
+        function startAuto() {
+            const btn = document.getElementById('autoBtn');
+            if (btn) btn.textContent = '⏸ Пауза';
+            autoTimer = setInterval(() => {
+                if (currentStep >= steps.length) {
+                    stopAuto();
+                    return;
+                }
+                nextStep();
+            }, 700);
+        }
+
+        function stopAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            const btn = document.getElementById('autoBtn');
+            if (btn) btn.textContent = '⏯️ Авто';
+        }
 
         function getCsrfToken() {
             const token = document.querySelector('meta[name="csrf-token"]');
@@ -117,7 +121,6 @@ def bfs(graph, start):
             const cy = height / 2 + 10;
             const r = Math.min(width, height) * 0.34;
             const angleStep = (2 * Math.PI) / n;
-
             for (let i = 0; i < n; i++) {
                 const angle = -Math.PI / 2 + i * angleStep;
                 positions.push({
@@ -129,6 +132,8 @@ def bfs(graph, start):
         }
 
         async function startBFS() {
+            stopAuto();  // останавливаем автовоспроизведение при новом запуске
+
             const graphInput = document.getElementById('graphInput').value;
             const start = parseInt(document.getElementById('start').value);
             let graph;
@@ -169,13 +174,17 @@ def bfs(graph, start):
             steps = data.steps || [];
             currentStep = 0;
             document.getElementById('total').textContent = steps.length;
+            document.getElementById('step').textContent = '0';
             document.getElementById('prevBtn').disabled = true;
 
             if (steps.length > 0) nextStep();
         }
 
         function nextStep() {
-            if (currentStep >= steps.length) return;
+            if (currentStep >= steps.length) {
+                stopAuto();
+                return;
+            }
             const step = steps[currentStep];
             drawGraph(step);
             updateInfo(step);
@@ -185,6 +194,7 @@ def bfs(graph, start):
         }
 
         function prevStep() {
+            stopAuto();  // ручной шаг назад останавливает авто
             if (currentStep <= 0) return;
             currentStep--;
             const step = steps[currentStep];
@@ -196,13 +206,12 @@ def bfs(graph, start):
 
         function drawGraph(step) {
             ctx.clearRect(0, 0, 900, 500);
-
             const n = step.graph.length;
             const nodes = getNodePositions(n);
 
+            // Рёбра
             ctx.strokeStyle = '#cfcfcf';
             ctx.lineWidth = 2;
-
             for (let u = 0; u < n; u++) {
                 for (const v of step.graph[u]) {
                     if (u < v) {
@@ -214,40 +223,36 @@ def bfs(graph, start):
                 }
             }
 
+            // Узлы
             for (let i = 0; i < n; i++) {
-                let color = '#2196F3'; // не посещён
+                let color = '#2196F3'; // по умолчанию не посещён
 
-                if (step.queue && step.queue.includes(i)) {
-                    color = '#FF9800'; // в очереди = жёлтый/оранжевый
-                }
-
-                if (step.visited && step.visited[i]) {
-                    color = '#4CAF50'; // посещён
-                }
-
-                if (step.queue && step.queue.includes(i) && step.visited && step.visited[i]) {
-                    color = '#FF9800'; 
-                }
-
+                // 1. Текущий обрабатываемый узел (самый высокий приоритет)
                 if (i === step.current) {
-                    color = '#F44336'; // текущий
+                    color = '#F44336';
+                }
+                // 2. Узел в очереди (даже если он уже помечен как visited)
+                else if (step.queue && step.queue.includes(i)) {
+                    color = '#FF9800';
+                }
+                // 3. Уже посещённый узел (вышел из очереди, обработан)
+                else if (step.visited && step.visited[i]) {
+                    color = '#4CAF50';
                 }
 
                 ctx.fillStyle = color;
                 ctx.beginPath();
                 ctx.arc(nodes[i].x, nodes[i].y, nodeRadius, 0, 2 * Math.PI);
                 ctx.fill();
-
                 ctx.strokeStyle = '#fff';
                 ctx.lineWidth = 3;
                 ctx.stroke();
-
                 ctx.fillStyle = '#000';
                 ctx.font = 'bold 18px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText(i, nodes[i].x, nodes[i].y);
-}
+            }
         }
 
         function updateInfo(step) {
@@ -259,6 +264,10 @@ def bfs(graph, start):
         document.addEventListener('keydown', e => {
             if (e.key === 'ArrowRight') nextStep();
             if (e.key === 'ArrowLeft') prevStep();
+            if (e.key === ' ') {
+                e.preventDefault();
+                toggleAuto();
+            }
         });
     </script>
 </body>
