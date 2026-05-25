@@ -2,3 +2,7 @@
 __pycache__/
 db.sqlite3
 *.pyc
+staticfiles/
+media/
+.DS_Store
+*.log
