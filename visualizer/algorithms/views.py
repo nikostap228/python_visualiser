@@ -18,6 +18,7 @@ def index(request):
     return render(request, 'algorithms/index.html', {'algorithms': algorithms})
 
 
+@csrf_exempt
 def bubble_sort(request):
     if request.method == 'POST':
         data = json.loads(request.body)
